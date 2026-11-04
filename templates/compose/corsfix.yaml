@@ -1,0 +1,80 @@
+# documentation: https://corsfix.com/docs/open-source/self-hosting
+# slogan: Self-hosted CORS proxy and dashboard with per-site allowlists.
+# category: devtools
+# tags: corsfix,cors,proxy,api,developer-tools,mongodb,redis
+# logo: svgs/corsfix.png
+# port: 3000
+
+services:
+  mongodb:
+    image: mongo:8.0.17
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGODB_USER:-proxy}
+      - MONGO_INITDB_ROOT_PASSWORD=$SERVICE_PASSWORD_MONGODB
+      - MONGO_INITDB_DATABASE=db
+    volumes:
+      - corsfix-mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' | grep 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    entrypoint:
+      - redis-server
+      - --requirepass
+      - $SERVICE_PASSWORD_REDIS
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "$SERVICE_PASSWORD_REDIS", "PING"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  app:
+    image: ghcr.io/corsfix/corsfix-app:latest
+    platform: linux/amd64
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - SERVICE_URL_APP_3000
+      - MONGODB_URI=mongodb://${MONGODB_USER:-proxy}:${SERVICE_PASSWORD_MONGODB}@mongodb/db?authSource=admin
+      - REDIS_URI=redis://default:${SERVICE_PASSWORD_REDIS}@redis
+      - KEK_VERSION=KEK_VERSION_1
+      - KEK_VERSION_1=$SERVICE_REALBASE64_32_KEK
+      - AUTH_SECRET=$SERVICE_REALBASE64_32_AUTHSECRET
+      - AUTH_TRUST_HOST=true
+      - AUTH_URL=${SERVICE_URL_APP:-https://app.localhost}
+      - PROXY_DOMAIN=${SERVICE_FQDN_PROXY:-proxy.localhost}
+      - DISABLE_SIGNUP=${DISABLE_SIGNUP:-false}
+
+  proxy:
+    image: ghcr.io/corsfix/corsfix-proxy:latest
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - SERVICE_URL_PROXY_80
+      - MONGODB_URI=mongodb://${MONGODB_USER:-proxy}:${SERVICE_PASSWORD_MONGODB}@mongodb/db?authSource=admin
+      - REDIS_URI=redis://default:${SERVICE_PASSWORD_REDIS}@redis
+      - KEK_VERSION_1=$SERVICE_REALBASE64_32_KEK
+      - APP_DOMAIN=${SERVICE_FQDN_APP:-app.localhost}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+      - ALLOWED_TARGETS=${ALLOWED_TARGETS:-}
+      - RPM=${RPM:-180}
+
+volumes:
+  corsfix-mongodb-data:

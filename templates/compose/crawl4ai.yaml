@@ -1,0 +1,50 @@
+# documentation: https://docs.crawl4ai.com/core/self-hosting/
+# slogan: Open-source, LLM-friendly web crawler and scraper with a browser-backed API.
+# category: ai
+# tags: crawl4ai,crawler,scraper,llm,ai,playwright,web-scraping,rag
+# logo: svgs/crawl4ai.svg
+# port: 11235
+
+services:
+  crawl4ai:
+    image: unclecode/crawl4ai:${TAG:-latest}
+    restart: unless-stopped
+    shm_size: "1gb"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/lib/redis:uid=999,gid=999,mode=0700
+      - /var/lib/crawl4ai/outputs:uid=999,gid=999,mode=0700
+      - /home/appuser/.crawl4ai:uid=999,gid=999,mode=0700
+      - /home/appuser/.cache/url_seeder:uid=999,gid=999,mode=0700
+      - /home/appuser/.gunicorn:uid=999,gid=999,mode=0700
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          pids: 512
+        reservations:
+          memory: 1G
+    user: "appuser"
+    environment:
+      - SERVICE_URL_CRAWL4AI_11235
+      - CRAWL4AI_API_TOKEN=$SERVICE_PASSWORD_API
+      - CRAWL4AI_ALLOW_DEEP_CRAWL=${CRAWL4AI_ALLOW_DEEP_CRAWL:-false}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - TOGETHER_API_KEY=${TOGETHER_API_KEY:-}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11235/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

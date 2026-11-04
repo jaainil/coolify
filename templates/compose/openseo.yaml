@@ -1,0 +1,48 @@
+# documentation: https://github.com/every-app/open-seo
+# slogan: Open-source alternative to Semrush and Ahrefs.
+# category: analytics
+# tags: openseo,seo,keyword-research,rank-tracking,backlinks,analytics,dataforseo
+# logo: svgs/openseo.png
+# port: 3001
+
+services:
+  open-seo:
+    image: ghcr.io/every-app/open-seo:${OPEN_SEO_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      - SERVICE_URL_OPEN_SEO_3001
+      # Required for local Docker self-hosting: exposes Compose env vars to cloudflare:workers bindings.
+      - CLOUDFLARE_INCLUDE_PROCESS_ENV=true
+      - PORT=3001
+      - ALLOWED_HOST=${SERVICE_FQDN_OPEN_SEO:-}
+      # Password mode is the standalone Docker edition. The first visitor creates
+      # the admin account; use local_noauth only behind a private network.
+      - AUTH_MODE=${AUTH_MODE:-password}
+      - BETTER_AUTH_URL=${SERVICE_URL_OPEN_SEO:-http://localhost:3001}
+      - BETTER_AUTH_SECRET=$SERVICE_HEX_64_AUTH
+      - OPENSEO_TELEMETRY_DISABLED=${OPENSEO_TELEMETRY_DISABLED:-}
+      - DO_NOT_TRACK=${DO_NOT_TRACK:-}
+      # Required for SEO data features.
+      - DATAFORSEO_API_KEY=${DATAFORSEO_API_KEY:-}
+      # Optional: Google Maps basemap for Local SEO.
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}
+      # Optional: AI features (the SAM agent).
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-}
+      # Optional: Google Search Console.
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      # Optional: Cloudflare Access authentication.
+      - TEAM_DOMAIN=${TEAM_DOMAIN:-}
+      - POLICY_AUD=${POLICY_AUD:-}
+      # Optional: advanced audit features.
+      - CRAWLER_ACCESS_SECRET=${CRAWLER_ACCESS_SECRET:-}
+      - CONTEXT_API_KEY=${CONTEXT_API_KEY:-}
+      - AUDIT_BROWSER_RENDERING=${AUDIT_BROWSER_RENDERING:-}
+      - VITE_SHOW_DEVTOOLS=false
+    volumes:
+      - open-seo-data:/app/.wrangler
+
+volumes:
+  open-seo-data:

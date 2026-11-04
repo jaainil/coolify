@@ -1,0 +1,89 @@
+# documentation: https://shridarpatil.github.io/whatomate/
+# slogan: Modern, open-source WhatsApp Business Platform for messaging, campaigns and calls.
+# category: communication
+# tags: whatomate,whatsapp,whatsapp-business,chat,messaging,crm,postgresql,redis
+# logo: svgs/whatomate.svg
+# port: 8080
+
+services:
+  whatomate:
+    image: shridh0r/whatomate:latest
+    restart: unless-stopped
+    command: ["server", "-migrate"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - SERVICE_URL_WHATOMATE_8080
+      - TZ=${TZ:-UTC}
+      - WHATOMATE_APP__NAME=${WHATOMATE_APP_NAME:-Whatomate}
+      - WHATOMATE_APP__ENVIRONMENT=production
+      - WHATOMATE_APP__DEBUG=false
+      - WHATOMATE_APP__ENCRYPTION_KEY=$SERVICE_PASSWORD_ENCRYPTION
+      - WHATOMATE_SERVER__HOST=0.0.0.0
+      - WHATOMATE_SERVER__PORT=8080
+      - WHATOMATE_SERVER__ALLOWED_ORIGINS=${SERVICE_URL_WHATOMATE:-http://localhost:8080}
+      - WHATOMATE_DATABASE__HOST=db
+      - WHATOMATE_DATABASE__PORT=5432
+      - WHATOMATE_DATABASE__USER=$SERVICE_USER_POSTGRES
+      - WHATOMATE_DATABASE__PASSWORD=$SERVICE_PASSWORD_POSTGRES
+      - WHATOMATE_DATABASE__NAME=${POSTGRES_DB:-whatomate}
+      - WHATOMATE_REDIS__HOST=redis
+      - WHATOMATE_REDIS__PORT=6379
+      - WHATOMATE_REDIS__PASSWORD=$SERVICE_PASSWORD_REDIS
+      - WHATOMATE_JWT__SECRET=$SERVICE_PASSWORD_JWT
+      - WHATOMATE_STORAGE__TYPE=local
+      - WHATOMATE_STORAGE__LOCAL_PATH=/app/uploads
+      - WHATOMATE_WHATSAPP__WEBHOOK_VERIFY_TOKEN=$SERVICE_PASSWORD_WEBHOOK
+      - WHATOMATE_WHATSAPP__APP_ID=${WHATSAPP_APP_ID:-}
+      - WHATOMATE_WHATSAPP__APP_SECRET=${WHATSAPP_APP_SECRET:-}
+      - WHATOMATE_WHATSAPP__CONFIG_ID=${WHATSAPP_CONFIG_ID:-}
+      - WHATOMATE_DEFAULT_ADMIN__EMAIL=${WHATOMATE_ADMIN_EMAIL:-admin@admin.com}
+      - WHATOMATE_DEFAULT_ADMIN__PASSWORD=$SERVICE_PASSWORD_ADMIN
+      - WHATOMATE_DEFAULT_ADMIN__FULL_NAME=${WHATOMATE_ADMIN_NAME:-Admin}
+    volumes:
+      - whatomate-uploads:/app/uploads
+      - type: bind
+        source: ./config.toml
+        target: /app/config.toml
+        read_only: true
+        content: |
+          # Whatomate settings are provided through the WHATOMATE_* environment variables.
+          # This file only needs to exist for the server to start.
+          [app]
+          name = "Whatomate"
+          environment = "production"
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=$SERVICE_USER_POSTGRES
+      - POSTGRES_PASSWORD=$SERVICE_PASSWORD_POSTGRES
+      - POSTGRES_DB=${POSTGRES_DB:-whatomate}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $SERVICE_USER_POSTGRES -d ${POSTGRES_DB:-whatomate}"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    volumes:
+      - whatomate-postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["sh", "-c", "redis-server --requirepass \"$SERVICE_PASSWORD_REDIS\""]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "$SERVICE_PASSWORD_REDIS", "PING"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - whatomate-redis-data:/data
+
+volumes:
+  whatomate-uploads:
+  whatomate-postgres-data:
+  whatomate-redis-data:

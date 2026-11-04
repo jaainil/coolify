@@ -1,0 +1,39 @@
+# documentation: https://evershop.io/docs/development/getting-started/installation-guide
+# slogan: Modern, TypeScript-first eCommerce platform built with GraphQL and React.
+# category: cms
+# tags: evershop,ecommerce,shop,store,graphql,react,postgresql
+# logo: svgs/evershop.png
+# port: 3000
+
+services:
+  app:
+    image: evershop/evershop:${EVERSHOP_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      - SERVICE_URL_EVERSHOP_3000
+      - DB_HOST=database
+      - DB_PORT=5432
+      - DB_USER=${POSTGRES_USER:-postgres}
+      - DB_PASSWORD=$SERVICE_PASSWORD_POSTGRES
+      - DB_NAME=${POSTGRES_DB:-postgres}
+
+  database:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=$SERVICE_PASSWORD_POSTGRES
+      - POSTGRES_DB=${POSTGRES_DB:-postgres}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    volumes:
+      - evershop-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  evershop-postgres-data:

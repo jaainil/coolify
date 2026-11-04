@@ -1,22 +1,38 @@
 # documentation: https://github.com/decolua/9router
 # slogan: Free AI coding gateway. Routes Claude Code, Codex, Cursor, Cline, Copilot requests to 40+ LLM providers with auto-fallback and token savings.
 # category: ai
-# tags: ai, gateway, routing, coding, llm, providers
+# tags: ai,gateway,routing,coding,llm,providers,headroom
 # logo: svgs/9router.svg
 # port: 20128
 
 services:
   9router:
-    image: decolua/9router:0.5.65
-    volumes:
-      - '9router:/app/data'
+    image: decolua/9router:latest
+    restart: unless-stopped
+    depends_on:
+      - headroom
     environment:
       - SERVICE_URL_9ROUTER_20128
       - DATA_DIR=/app/data
-      - INITIAL_PASSWORD=${SERVICE_PASSWORD_PASSWORD}
+      - PORT=20128
+      - HOSTNAME=0.0.0.0
+      - NODE_ENV=production
+      - HEADROOM_URL=http://headroom:8787
       - JWT_SECRET=${SERVICE_PASSWORD_64_JWTSECRET}
+      - INITIAL_PASSWORD=${SERVICE_PASSWORD_PASSWORD}
       - API_KEY_SECRET=${SERVICE_PASSWORD_KEYSECRET}
       - MACHINE_ID_SALT=${SERVICE_HEX_64_HMACSALT}
+      - ENABLE_REQUEST_LOGS=${ENABLE_REQUEST_LOGS:-false}
+      - OBSERVABILITY_ENABLED=${OBSERVABILITY_ENABLED:-true}
+      - AUTH_COOKIE_SECURE=${AUTH_COOKIE_SECURE:-true}
+      - REQUIRE_API_KEY=${REQUIRE_API_KEY:-false}
+      - BASE_URL=http://127.0.0.1:20128
+      - CLOUD_URL=${CLOUD_URL:-https://9router.com}
+      - NEXT_PUBLIC_BASE_URL=${SERVICE_URL_9ROUTER:-http://localhost:20128}
+      - NEXT_PUBLIC_CLOUD_URL=${CLOUD_URL:-https://9router.com}
+      - SEARXNG_URL=${SEARXNG_URL:-}
+    volumes:
+      - 9router-data:/app/data
     healthcheck:
       test:
         - CMD
@@ -26,3 +42,10 @@ services:
       interval: 5s
       timeout: 10s
       retries: 5
+
+  headroom:
+    image: ghcr.io/chopratejas/headroom:latest
+    restart: unless-stopped
+
+volumes:
+  9router-data:

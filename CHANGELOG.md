@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Add a Whatomate one-click service template for the self-hosted WhatsApp Business platform, with PostgreSQL and Redis
+- Add an OpenSEO one-click service template, with password authentication and optional DataForSEO, OpenRouter and Google integrations
+- Add an OpenAnalytics one-click service template, with ClickHouse, PostgreSQL, Valkey and the full analytics stack
+- Update the Formbricks template to the v6 stack with SpiceDB, Hub, Cube and the new authentication secrets
+- Add a Firecrawl one-click service template, with the API, Playwright, PostgreSQL, Redis and RabbitMQ services
+- Use a dedicated MySQL user and MySQL 8.0 in the EasyAppointments template
+- Add an explicit `PORT` to the Drizzle Gateway service template
+- Add a draw.io one-click service template, with its deployment URL derived from the Coolify domain
+- Add a Corsfix one-click service template, with MongoDB, Redis and separate app and proxy domains
+- Add an EverShop one-click service template, with PostgreSQL and a generated database password
+- Add a Crawl4AI one-click service template, with a generated API token and hardened container settings
+- Add a Botpress one-click service template, with PostgreSQL and persistent bot data
+- Add a BlogFactory one-click service template, with PostgreSQL, MinIO and the draft-delivery scheduler
+- Add an Apache Answer one-click service template, with automatic installation and PostgreSQL
+- Add the Headroom companion and the full environment contract to the 9Router service template
+
 ## [v4.6.0] - 2026-11-02
 
 ### Breaking Changes

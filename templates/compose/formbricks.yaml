@@ -6,136 +6,320 @@
 # port: 3000
 
 services:
-  formbricks:
-    image: ghcr.io/formbricks/formbricks:4.5.0 # Released on Jan 5 2026
-    environment:
-      - SERVICE_URL_FORMBRICKS_3000
-      - WEBAPP_URL=$SERVICE_URL_FORMBRICKS
-      - DATABASE_URL=postgres://$SERVICE_USER_POSTGRESQL:$SERVICE_PASSWORD_POSTGRESQL@postgresql:5432/${POSTGRESQL_DATABASE:-formbricks}
-      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRESQL}
-      - NEXTAUTH_SECRET=$SERVICE_BASE64_NEXTAUTH
-      - NEXTAUTH_URL=$SERVICE_URL_FORMBRICKS
-      - ENCRYPTION_KEY=$SERVICE_BASE64_ENCRYPTION
-      - CRON_SECRET=$SERVICE_BASE64_CRON
-      - ENTERPRISE_LICENSE_KEY=${ENTERPRISE_LICENSE_KEY}
-      - MAIL_FROM=${MAIL_FROM:-test@example.com}
-      - SMTP_HOST=${SMTP_HOST:-test.example.com}
-      - SMTP_PORT=${SMTP_PORT:-587}
-      - SMTP_USER=${SMTP_USER:-test}
-      - SMTP_PASSWORD=${SMTP_PASSWORD:-test}
-      - SMTP_SECURE_ENABLED=${SMTP_SECURE_ENABLED:-0}
-      - SMTP_REJECT_UNAUTHORIZED_TLS=${SMTP_REJECT_UNAUTHORIZED_TLS:-1}
-      - SHORT_URL_BASE=${SHORT_URL_BASE}
-      - EMAIL_VERIFICATION_DISABLED=${EMAIL_VERIFICATION_DISABLED:-1}
-      - PASSWORD_RESET_DISABLED=${PASSWORD_RESET_DISABLED:-1}
-      - EMAIL_AUTH_DISABLED=${EMAIL_AUTH_DISABLED:-0}
-      - INVITE_DISABLED=${INVITE_DISABLED:-0}
-      - ASSET_PREFIX_URL=${ASSET_PREFIX_URL}
-      - UNSPLASH_ACCESS_KEY=${UNSPLASH_ACCESS_KEY}
-      - GITHUB_ID=${GITHUB_ID}
-      - GITHUB_SECRET=${GITHUB_SECRET}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - AZUREAD_CLIENT_ID=${AZUREAD_CLIENT_ID}
-      - AZUREAD_CLIENT_SECRET=${AZUREAD_CLIENT_SECRET}
-      - AZUREAD_TENANT_ID=${AZUREAD_TENANT_ID}
-      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID}
-      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET}
-      - OIDC_ISSUER=${OIDC_ISSUER}
-      - OIDC_DISPLAY_NAME=${OIDC_DISPLAY_NAME}
-      - OIDC_SIGNING_ALGORITHM=${OIDC_SIGNING_ALGORITHM}
-      - NOTION_OAUTH_CLIENT_ID=${NOTION_OAUTH_CLIENT_ID}
-      - NOTION_OAUTH_CLIENT_SECRET=${NOTION_OAUTH_CLIENT_SECRET}
-      - GOOGLE_SHEETS_CLIENT_ID=${GOOGLE_SHEETS_CLIENT_ID}
-      - GOOGLE_SHEETS_CLIENT_SECRET=${GOOGLE_SHEETS_CLIENT_SECRET}
-      - GOOGLE_SHEETS_REDIRECT_URL=${GOOGLE_SHEETS_REDIRECT_URL}
-      - AIRTABLE_CLIENT_ID=${AIRTABLE_CLIENT_ID}
-      - SLACK_CLIENT_ID=${SLACK_CLIENT_ID}
-      - SLACK_CLIENT_SECRET=${SLACK_CLIENT_SECRET}
-      - PRIVACY_URL=${PRIVACY_URL}
-      - TERMS_URL=${TERMS_URL}
-      - IMPRINT_URL=${IMPRINT_URL}
-      - RATE_LIMITING_DISABLED=${RATE_LIMITING_DISABLED:-0}
-      - OPENTELEMETRY_LISTENER_URL=${OPENTELEMETRY_LISTENER_URL}
-      - 'REDIS_URL=redis://valkey:6379'
-      - DEFAULT_ORGANIZATION_ID=${DEFAULT_ORGANIZATION_ID}
-      - DEFAULT_ORGANIZATION_ROLE=${DEFAULT_ORGANIZATION_ROLE:-owner}
-      - S3_ACCESS_KEY=$SERVICE_USER_MINIO
-      - S3_SECRET_KEY=${SERVICE_PASSWORD_MINIO}
-      - S3_REGION=us-east-1
-      - S3_BUCKET_NAME=formbricks
-      - S3_ENDPOINT_URL=$MINIO_SERVER_URL # This has to be publically accessible by frombricks frontend, using http://minio:9000 doesn't work!!
-      - 'S3_FORCE_PATH_STYLE=1'
+  postgres:
+    image: pgvector/pgvector:pg18
+    restart: unless-stopped
     volumes:
-      - formbricks-uploads:/apps/web/uploads/
-    depends_on:
-      postgresql:
-        condition: service_healthy
-      valkey:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000"]
-      interval: 2s
-      timeout: 10s
-      retries: 15
-
-  postgresql:
-    image: pgvector/pgvector:pg16
-    volumes:
-      - formbricks-postgresql-data:/var/lib/postgresql/data
+      - formbricks-postgres-data:/var/lib/postgresql
     environment:
-      - POSTGRES_USER=${SERVICE_USER_POSTGRESQL}
-      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRESQL}
-      - POSTGRES_DB=${POSTGRESQL_DATABASE:-formbricks}
+      - POSTGRES_PASSWORD=$SERVICE_PASSWORD_POSTGRES
+      - POSTGRES_DB=formbricks
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres || exit 1"]
       interval: 5s
-      timeout: 20s
-      retries: 10
+      timeout: 3s
+      retries: 30
+      start_period: 30s
 
-  valkey:
-    image: valkey/valkey:8-alpine
-    command: valkey-server --appendonly yes
+  authzed-db-bootstrap:
+    image: pgvector/pgvector:pg18
+    restart: "no"
+    entrypoint: ["/bin/sh", "/bootstrap.sh"]
+    environment:
+      - POSTGRES_ADMIN_URL=postgresql://postgres:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/postgres?sslmode=disable
+      - AUTHZED_DATABASE_NAME=spicedb
+      - AUTHZED_DATABASE_USERNAME=spicedb
+      - AUTHZED_DATABASE_PASSWORD=$SERVICE_PASSWORD_AUTHZED
     volumes:
-      - formbricks-valkey:/data
+      - type: bind
+        source: ./authzed-postgres-bootstrap.sh
+        target: /bootstrap.sh
+        content: |
+          #!/bin/sh
+
+          set -eu
+
+          : "${POSTGRES_ADMIN_URL:?POSTGRES_ADMIN_URL is required}"
+          : "${AUTHZED_DATABASE_PASSWORD:?AUTHZED_DATABASE_PASSWORD is required}"
+
+          AUTHZED_DATABASE_NAME="${AUTHZED_DATABASE_NAME:-spicedb}"
+          AUTHZED_DATABASE_USERNAME="${AUTHZED_DATABASE_USERNAME:-spicedb}"
+
+          psql "${POSTGRES_ADMIN_URL}" \
+            --set=ON_ERROR_STOP=1 \
+            --set=database_name="${AUTHZED_DATABASE_NAME}" \
+            --set=database_username="${AUTHZED_DATABASE_USERNAME}" \
+            --set=database_password="${AUTHZED_DATABASE_PASSWORD}" <<'SQL'
+          SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'database_username', :'database_password')
+          WHERE NOT EXISTS (
+            SELECT 1 FROM pg_roles WHERE rolname = :'database_username'
+          ) \gexec
+
+          SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'database_username', :'database_password') \gexec
+
+          SELECT format('CREATE DATABASE %I OWNER %I', :'database_name', :'database_username')
+          WHERE NOT EXISTS (
+            SELECT 1 FROM pg_database WHERE datname = :'database_name'
+          ) \gexec
+
+          SELECT format('ALTER DATABASE %I OWNER TO %I', :'database_name', :'database_username') \gexec
+          SQL
+
+          printf '%s\n' "AuthZed database bootstrap completed."
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  spicedb-migrate:
+    image: authzed/spicedb:v1.57.0
+    restart: "no"
+    command: datastore migrate head
+    environment:
+      - SPICEDB_DATASTORE_ENGINE=postgres
+      - SPICEDB_DATASTORE_CONN_URI=postgresql://spicedb:${SERVICE_PASSWORD_AUTHZED}@postgres:5432/spicedb?sslmode=disable
+    depends_on:
+      authzed-db-bootstrap:
+        condition: service_completed_successfully
+
+  spicedb:
+    image: authzed/spicedb:v1.57.0
+    restart: unless-stopped
+    command: serve
+    mem_limit: 512m
+    environment:
+      - SPICEDB_DATASTORE_ENGINE=postgres
+      - SPICEDB_DATASTORE_CONN_URI=postgresql://spicedb:${SERVICE_PASSWORD_AUTHZED}@postgres:5432/spicedb?sslmode=disable
+      - SPICEDB_GRPC_PRESHARED_KEY=$SERVICE_PASSWORD_AUTHZEDTOKEN
+      - SPICEDB_LOG_FORMAT=json
+      - SPICEDB_LOG_LEVEL=info
+      - SPICEDB_TELEMETRY_ENDPOINT=
+    depends_on:
+      spicedb-migrate:
+        condition: service_completed_successfully
     healthcheck:
-      test:
-        - CMD-SHELL
-        - 'valkey-cli ping | grep PONG'
+      test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=localhost:50051"]
       interval: 5s
       timeout: 5s
-      retries: 5
-      start_period: 3s
+      retries: 12
+      start_period: 10s
 
-  minio:
-    image: pgsty/silo:RELEASE.2026-10-15T00-00-00Z # Released on 15 October 2026
-    command: server /data --console-address ":9001"
-    environment:
-      - MINIO_SERVER_URL=$MINIO_SERVER_URL
-      - MINIO_BROWSER_REDIRECT_URL=$MINIO_BROWSER_REDIRECT_URL
-      - MINIO_ROOT_USER=$SERVICE_USER_MINIO
-      - MINIO_ROOT_PASSWORD=$SERVICE_PASSWORD_MINIO
+  redis:
+    image: valkey/valkey@sha256:418652cfb58ef879d4978c33553735d7147016032d5aefaa14c828e611eb9dfd
+    restart: unless-stopped
+    command: valkey-server --appendonly yes --maxmemory-policy noeviction
     volumes:
-      - formbricks-minio-data:/data
+      - formbricks-redis-data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 5s
-      timeout: 20s
-      retries: 10
-      
-  minio-init:
-    image: pgsty/silo:RELEASE.2026-10-15T00-00-00Z
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      sh -c "
-        mc alias set local http://minio:9000 ${SERVICE_USER_MINIO} ${SERVICE_PASSWORD_MINIO} &&
-        mc mb -p local/formbricks || true &&
-        mc anonymous set private local/formbricks
-      "
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  formbricks-migrate:
+    image: ghcr.io/formbricks/formbricks:latest
     restart: "no"
-    exclude_from_hc: true
+    entrypoint: ["sh", "-c"]
+    command:
+      - "node /home/nextjs/validate-env.mjs && if command -v timeout >/dev/null 2>&1; then timeout 300 node packages/database/dist/scripts/apply-migrations.js; else node packages/database/dist/scripts/apply-migrations.js; fi"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - WEBAPP_URL=${SERVICE_URL_FORMBRICKS:-http://localhost:3000}
+      - BETTER_AUTH_URL=${SERVICE_URL_FORMBRICKS:-http://localhost:3000}
+      - DATABASE_URL=postgresql://postgres:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/formbricks?schema=public
+      - BETTER_AUTH_SECRET=$SERVICE_HEX_64_AUTH
+      - ENCRYPTION_KEY=$SERVICE_HEX_64_ENCRYPTION
+      - CRON_SECRET=$SERVICE_HEX_64_CRON
+      - REDIS_URL=redis://redis:6379
+      - HUB_API_KEY=$SERVICE_HEX_64_HUB
+      - HUB_API_URL=http://hub:8080
+      - CUBEJS_API_URL=http://cube:4000
+      - CUBEJS_API_SECRET=$SERVICE_HEX_64_CUBE
+      - CUBEJS_JWT_ISSUER=formbricks-web
+      - CUBEJS_JWT_AUDIENCE=formbricks-cube
+      - AUTHZED_ENABLED=true
+      - AUTHZED_ENDPOINT=spicedb:50051
+      - AUTHZED_TOKEN=$SERVICE_PASSWORD_AUTHZEDTOKEN
+      - AUTHZED_SYSTEM_KEY=formbricks
+      - AUTHZED_INSECURE=true
+      - AUTHZED_CONSISTENCY=fully_consistent
+      - EMAIL_VERIFICATION_DISABLED=1
+      - PASSWORD_RESET_DISABLED=1
+      - LOG_LEVEL=info
+
+  formbricks:
+    image: ghcr.io/formbricks/formbricks:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      cube:
+        condition: service_healthy
+      formbricks-migrate:
+        condition: service_completed_successfully
+      authzed-initialize:
+        condition: service_completed_successfully
+      hub-migrate:
+        condition: service_completed_successfully
+      hub:
+        condition: service_started
+    environment:
+      - SERVICE_URL_FORMBRICKS_3000
+      - WEBAPP_URL=${SERVICE_URL_FORMBRICKS:-http://localhost:3000}
+      - BETTER_AUTH_URL=${SERVICE_URL_FORMBRICKS:-http://localhost:3000}
+      - DATABASE_URL=postgresql://postgres:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/formbricks?schema=public
+      - BETTER_AUTH_SECRET=$SERVICE_HEX_64_AUTH
+      - ENCRYPTION_KEY=$SERVICE_HEX_64_ENCRYPTION
+      - CRON_SECRET=$SERVICE_HEX_64_CRON
+      - REDIS_URL=redis://redis:6379
+      - HUB_API_KEY=$SERVICE_HEX_64_HUB
+      - HUB_API_URL=http://hub:8080
+      - CUBEJS_API_URL=http://cube:4000
+      - CUBEJS_API_SECRET=$SERVICE_HEX_64_CUBE
+      - CUBEJS_JWT_ISSUER=formbricks-web
+      - CUBEJS_JWT_AUDIENCE=formbricks-cube
+      - AUTHZED_ENABLED=true
+      - AUTHZED_ENDPOINT=spicedb:50051
+      - AUTHZED_TOKEN=$SERVICE_PASSWORD_AUTHZEDTOKEN
+      - AUTHZED_SYSTEM_KEY=formbricks
+      - AUTHZED_INSECURE=true
+      - AUTHZED_CONSISTENCY=fully_consistent
+      - SKIP_STARTUP_MIGRATION=true
+      - EMAIL_VERIFICATION_DISABLED=1
+      - PASSWORD_RESET_DISABLED=1
+      - LOG_LEVEL=info
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+
+  authzed-initialize:
+    image: ghcr.io/formbricks/formbricks:latest
+    restart: "no"
+    entrypoint: ["formbricks-authzed"]
+    command: ["upgrade", "prepare"]
+    depends_on:
+      formbricks-migrate:
+        condition: service_completed_successfully
+      spicedb:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://postgres:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/formbricks?schema=public
+      - ENCRYPTION_KEY=authzed-initialize-unused
+      - CUBEJS_API_SECRET=authzed-initialize-unused
+      - CUBEJS_API_URL=http://localhost
+      - HUB_API_KEY=authzed-initialize-unused
+      - HUB_API_URL=http://localhost
+      - REDIS_URL=redis://localhost
+      - LOG_LEVEL=fatal
+      - AUTHZED_ENABLED=true
+      - AUTHZED_ENDPOINT=spicedb:50051
+      - AUTHZED_TOKEN=$SERVICE_PASSWORD_AUTHZEDTOKEN
+      - AUTHZED_SYSTEM_KEY=formbricks
+      - AUTHZED_INSECURE=true
+      - AUTHZED_CONSISTENCY=fully_consistent
+
+  hub-migrate:
+    image: ghcr.io/formbricks/hub:latest
+    restart: "no"
+    entrypoint: ["sh", "-c"]
+    command:
+      - 'if [ -x /usr/local/bin/goose ] && [ -x /usr/local/bin/river ]; then /usr/local/bin/goose -dir /app/migrations postgres "$$DATABASE_URL" up && /usr/local/bin/river migrate-up --database-url "$$DATABASE_URL"; else echo "Migration tools (goose/river) not in image."; exit 1; fi'
+    depends_on:
+      formbricks-migrate:
+        condition: service_completed_successfully
+    environment:
+      - DATABASE_URL=postgresql://postgres:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/formbricks?sslmode=disable
+
+  hub:
+    image: ghcr.io/formbricks/hub:latest
+    restart: unless-stopped
+    depends_on:
+      hub-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://postgres:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/formbricks?sslmode=disable
+      - TAXONOMY_SERVICE_URL=
+      - TAXONOMY_SERVICE_TOKEN=
+      - HUB_INTERNAL_API_TOKEN=
+      - API_KEY=$SERVICE_HEX_64_HUB
+
+  hub-worker:
+    image: ghcr.io/formbricks/hub:latest
+    restart: unless-stopped
+    entrypoint: ["/app/hub-worker"]
+    depends_on:
+      hub-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    environment:
+      - DATABASE_URL=postgresql://postgres:${SERVICE_PASSWORD_POSTGRES}@postgres:5432/formbricks?sslmode=disable
+      - TAXONOMY_SERVICE_URL=
+      - TAXONOMY_SERVICE_TOKEN=
+      - HUB_INTERNAL_API_TOKEN=
+
+  cube-config:
+    image: curlimages/curl:8.15.0
+    restart: "no"
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        mkdir -p /config/model
+        curl -fsSL https://raw.githubusercontent.com/formbricks/formbricks/main/docker/cube/cube.js -o /config/cube.js
+        curl -fsSL https://raw.githubusercontent.com/formbricks/formbricks/main/docker/cube/schema/FeedbackRecords.js -o /config/model/FeedbackRecords.js
+    volumes:
+      - formbricks-cube-config:/config
+
+  cube:
+    image: ghcr.io/formbricks/cube:1.8.8-2
+    restart: unless-stopped
+    depends_on:
+      cube-config:
+        condition: service_completed_successfully
+      hub-migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    environment:
+      - CUBEJS_DB_TYPE=postgres
+      - CUBEJS_DB_HOST=postgres
+      - CUBEJS_DB_NAME=formbricks
+      - CUBEJS_DB_USER=postgres
+      - CUBEJS_DB_PASS=$SERVICE_PASSWORD_POSTGRES
+      - CUBEJS_DB_PORT=5432
+      - CUBEJS_API_SECRET=$SERVICE_HEX_64_CUBE
+      - CUBEJS_JWT_ISSUER=formbricks-web
+      - CUBEJS_JWT_AUDIENCE=formbricks-cube
+      - CUBEJS_DEFAULT_API_SCOPES=meta,data
+      - CUBEJS_EXTERNAL_DEFAULT=false
+      - CUBEJS_CACHE_AND_QUEUE_DRIVER=memory
+    volumes:
+      - formbricks-cube-config:/cube/conf:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:4000/readyz', (res) => { res.resume(); process.exit(res.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  formbricks-postgres-data:
+  formbricks-redis-data:
+  formbricks-cube-config:

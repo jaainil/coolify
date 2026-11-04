@@ -1,0 +1,34 @@
+# documentation: https://www.drawio.com/docs/security/diagrams-docker-app/
+# slogan: Open-source diagramming and whiteboarding tool for flowcharts, mind maps and more.
+# category: productivity
+# tags: drawio,diagrams,whiteboard,flowchart,mindmap,diagramming
+# logo: svgs/drawio.png
+# port: 8080
+
+services:
+  drawio:
+    image: jgraph/drawio:${DRAWIO_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      - SERVICE_URL_DRAWIO_8080
+      - DRAWIO_SERVER_URL=${SERVICE_URL_DRAWIO:-http://localhost:8080}/
+      - DRAWIO_BASE_URL=${DRAWIO_BASE_URL:-}
+      - DRAWIO_VIEWER_URL=${DRAWIO_VIEWER_URL:-}
+      - DRAWIO_LIGHTBOX_URL=${DRAWIO_LIGHTBOX_URL:-}
+      - DRAWIO_CSP_HEADER=${DRAWIO_CSP_HEADER:-}
+      - DRAWIO_USE_HTTP=${DRAWIO_USE_HTTP:-}
+      - DRAWIO_CONFIG=${DRAWIO_CONFIG:-}
+      - DRAWIO_CONFIG_FILE=${DRAWIO_CONFIG_FILE:-}
+      - DRAWIO_LANG=${DRAWIO_LANG:-}
+      - DRAWIO_GOOGLE_CLIENT_ID=${DRAWIO_GOOGLE_CLIENT_ID:-}
+      - DRAWIO_GOOGLE_CLIENT_SECRET=${DRAWIO_GOOGLE_CLIENT_SECRET:-}
+      - DRAWIO_GOOGLE_APP_ID=${DRAWIO_GOOGLE_APP_ID:-}
+      - DRAWIO_GOOGLE_VIEWER_CLIENT_ID=${DRAWIO_GOOGLE_VIEWER_CLIENT_ID:-}
+      - DRAWIO_GOOGLE_VIEWER_CLIENT_SECRET=${DRAWIO_GOOGLE_VIEWER_CLIENT_SECRET:-}
+      - DRAWIO_GOOGLE_VIEWER_APP_ID=${DRAWIO_GOOGLE_VIEWER_APP_ID:-}
+      - DRAWIO_MSGRAPH_CLIENT_ID=${DRAWIO_MSGRAPH_CLIENT_ID:-}
+      - DRAWIO_MSGRAPH_CLIENT_SECRET=${DRAWIO_MSGRAPH_CLIENT_SECRET:-}
+      - DRAWIO_MSGRAPH_TENANT_ID=${DRAWIO_MSGRAPH_TENANT_ID:-}
+      - DRAWIO_GITLAB_ID=${DRAWIO_GITLAB_ID:-}
+      - DRAWIO_GITLAB_SECRET=${DRAWIO_GITLAB_SECRET:-}
+      - DRAWIO_GITLAB_URL=${DRAWIO_GITLAB_URL:-}

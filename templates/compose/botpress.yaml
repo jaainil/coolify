@@ -1,0 +1,54 @@
+# documentation: https://v12.botpress.com/
+# slogan: Open-source conversational AI platform for building and deploying chatbots.
+# category: ai
+# tags: botpress,chatbot,ai,conversational,nlu,postgresql,bot
+# logo: svgs/botpress.svg
+# port: 3001
+
+services:
+  botpress:
+    image: botpress/server:12.31.9
+    restart: unless-stopped
+    depends_on:
+      botpress-db:
+        condition: service_healthy
+    environment:
+      - SERVICE_URL_BOTPRESS_3001
+      - BP_HOST=0.0.0.0
+      - BP_CONFIG_HTTPSERVER_HOST=0.0.0.0
+      - PORT=3000
+      - BP_CONFIG_HTTPSERVER_PORT=3000
+      - BP_CONFIG_HTTPSERVER_EXTERNALURL=${SERVICE_URL_BOTPRESS:-http://localhost:3001}
+      - NODE_ENV=production
+      - PG_HOST=botpress-db
+      - PG_PORT=5432
+      - PG_USER=postgres
+      - PG_PASSWORD=$SERVICE_PASSWORD_POSTGRES
+      - PG_SSL=false
+    volumes:
+      - botpress-data:/botpress/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3001/admin/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+
+  botpress-db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=$SERVICE_PASSWORD_POSTGRES
+      - POSTGRES_DB=botpress
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d botpress"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    volumes:
+      - botpress-db-data:/var/lib/postgresql/data
+
+volumes:
+  botpress-data:
+  botpress-db-data:

@@ -12,25 +12,31 @@ services:
       - SERVICE_URL_EASYAPPOINTMENTS_80
       - BASE_URL=${SERVICE_URL_EASYAPPOINTMENTS}
       - DB_HOST=mysql
-      - DB_NAME=easyappointments
-      - DB_USERNAME=root
-      - DB_PASSWORD=${SERVICE_PASSWORD_EASYAPPOINTMENTS}
+      - DB_NAME=${MYSQL_DATABASE:-easyappointments}
+      - DB_USERNAME=${MYSQL_USER:-easyappointments}
+      - DB_PASSWORD=$SERVICE_PASSWORD_MYSQL
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1"]
       interval: 2s
       timeout: 10s
       retries: 30
   mysql:
-    image: mysql:8
+    image: mysql:8.0
     volumes:
       - easyappointments-mysql-data:/var/lib/mysql
     environment:
-      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_EASYAPPOINTMENTS}
-      - MYSQL_DATABASE=easyappointments
+      - MYSQL_ROOT_PASSWORD=$SERVICE_PASSWORD_MYSQLROOT
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-easyappointments}
+      - MYSQL_USER=${MYSQL_USER:-easyappointments}
+      - MYSQL_PASSWORD=$SERVICE_PASSWORD_MYSQL
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
       interval: 5s
       timeout: 20s
       retries: 10
+
+volumes:
+  easyappointments-mysql-data:
